@@ -14,7 +14,7 @@ const benefits = [
     icon: Zap,
     title: "Lightning Fast",
     description: "Real-time sync across all devices",
-    size: "lg",
+    size: "md",
   },
   {
     icon: Clock,
@@ -32,19 +32,19 @@ const benefits = [
     icon: Smartphone,
     title: "Mobile First",
     description: "Beautiful iOS & Android apps",
-    size: "md",
+    size: "sm",
   },
   {
     icon: Shield,
     title: "Bank-Grade Security",
     description: "256-bit encryption",
-    size: "md",
+    size: "sm",
   },
   {
     icon: Sparkles,
     title: "Advanced Analytics",
     description: "Detailed insights & reports",
-    size: "lg",
+    size: "md",
   },
 ];
 
@@ -80,7 +80,7 @@ const Benefits = () => {
           {benefits.map((benefit, index) => {
             const gridClasses = {
               lg: "col-span-2 row-span-2",
-              md: "col-span-2 md:col-span-1 row-span-1",
+              md: "col-span-2 md:col-span-2 row-span-1",
               sm: "col-span-1 row-span-1",
             };
 

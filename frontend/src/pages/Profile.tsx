@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -29,14 +30,25 @@ const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [message, setMessage] = useState("");
   
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   // Profile form state
   const [formData, setFormData] = useState({
     name: user?.name || "",
     email: user?.email || "",
     phone: user?.phone || ""
   });
+
+  useEffect(() => {
+    setFormData({
+      name: user?.name || "",
+      email: user?.email || "",
+      phone: user?.phone || "",
+    });
+  }, [user]);
   
   // Password change state
   const [passwordData, setPasswordData] = useState({
@@ -58,6 +70,47 @@ const Profile = () => {
       setMessage("Failed to update profile");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleProfilePhotoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingPhoto(true);
+    setMessage("");
+
+    try {
+      const token = localStorage.getItem("auth_token");
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const res = await fetch("http://localhost:5000/upload/profile-photo", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Unable to upload photo");
+        setMessage(data.error || "Unable to upload photo");
+        return;
+      }
+
+      const imageUrl = data?.data?.imageUrl || data?.imageUrl;
+      if (imageUrl) {
+        updateProfile({ avatar: imageUrl });
+        toast.success("Profile photo uploaded successfully");
+        setMessage("Profile photo updated successfully!");
+      }
+    } catch (err) {
+      toast.error("Failed to upload profile photo");
+      setMessage("Failed to upload profile photo");
+      console.error(err);
+    } finally {
+      setUploadingPhoto(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -166,12 +219,25 @@ const Profile = () => {
                         {getInitials(user?.name || "User")}
                       </AvatarFallback>
                     </Avatar>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleProfilePhotoChange}
+                    />
                     <Button
                       size="sm"
                       variant="outline"
                       className="absolute -bottom-2 -right-2 rounded-full w-8 h-8 p-0"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingPhoto}
                     >
-                      <Camera className="w-4 h-4" />
+                      {uploadingPhoto ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                      ) : (
+                        <Camera className="w-4 h-4" />
+                      )}
                     </Button>
                   </div>
                   <div className="flex-1">

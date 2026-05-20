@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,8 @@ const Login = () => {
   
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname || "/dashboard";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,16 +28,7 @@ const Login = () => {
     try {
       const success = await login(email, password);
       if (success) {
-        // Check where user came from to decide routing
-        const loginSource = sessionStorage.getItem('login_source');
-        sessionStorage.removeItem('login_source'); // Clean up
-        
-        if (loginSource === 'get_started') {
-          navigate("/dashboard");
-        } else {
-          // Came from Login button, stay on home page
-          navigate("/");
-        }
+        navigate(from, { replace: true });
       } else {
         setError("Invalid email or password");
       }
