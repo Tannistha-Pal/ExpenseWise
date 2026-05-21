@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Wallet, TrendingUp, TrendingDown, Hash, Home } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Hash } from "lucide-react";
 import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart,
@@ -9,7 +9,6 @@ import { useAppContext } from "@/contexts/AppContext";
 import { useCurrency } from "@/hooks/useCurrency";
 import { SummaryCard } from "@/components/SummaryCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -85,14 +84,6 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center gap-3">
           <ThemeToggle />
-          <Button
-            variant="outline"
-            onClick={() => navigate("/")}
-            className="flex items-center gap-2"
-          >
-            <Home className="w-4 h-4" />
-            Home
-          </Button>
         </div>
       </div>
 

@@ -1,10 +1,10 @@
 const express = require("express");
+const path = require("path");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const dotenv = require("dotenv");
-const multer = require("multer");
 const Expense = require("./models/Expense");
 const User = require("./models/User");
 const { upload } = require("./middleware/uploadMiddleware");
@@ -41,6 +41,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 const JWT_SECRET = process.env.JWT_SECRET || "replace_me_in_env";
 
@@ -372,7 +373,12 @@ app.post("/upload/profile-photo", authMiddleware, upload.single("image"), async 
       return sendError(res, 400, "Please upload a profile image");
     }
 
-    const imageUrl = req.file.path || req.file.secure_url || req.file.filename || "";
+    let imageUrl = req.file.secure_url || req.file.filename || "";
+    if (!req.file.secure_url && req.file.path) {
+      const filename = path.basename(req.file.path);
+      imageUrl = `${req.protocol}://${req.get("host")}/uploads/${filename}`;
+    }
+
     req.user.avatar = imageUrl;
     await req.user.save();
 
