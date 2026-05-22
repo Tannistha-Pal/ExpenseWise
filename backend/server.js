@@ -1,16 +1,10 @@
 const express = require("express");
+const path = require("path");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const dotenv = require("dotenv");
-const path = require("path");
-const multer = require("multer");
 const Expense = require("./models/Expense");
 const User = require("./models/User");
-const { upload, cloudinaryConfigured } = require("./middleware/uploadMiddleware");
-
-dotenv.config();
 
 const app = express();
 
@@ -357,117 +351,7 @@ app.post("/auth/login", async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Login error:", err.message);
-    return sendError(res, 500, "Login failed", err.message);
-  }
-});
-
-// Return current user from token
-app.get("/auth/me", authMiddleware, async (req, res) => {
-  try {
-    return res.json({ success: true, message: "User restored", data: { user: req.user }, user: req.user });
-  } catch (err) {
-    return sendError(res, 500, "Failed to restore user", err.message);
-  }
-});
-
-
-// Update user profile (name, email, phone)
-app.patch("/auth/profile", authMiddleware, async (req, res) => {
-  try {
-    const { name, email, phone } = req.body;
-    if (!name || !email || !phone) {
-      return sendError(res, 400, "All fields are required");
-    }
-    // Check if email is being changed to one that already exists
-    if (email !== req.user.email) {
-      const existing = await User.findOne({ email });
-      if (existing && existing._id.toString() !== req.user._id.toString()) {
-        return sendError(res, 400, "Email already in use");
-      }
-    }
-    req.user.name = name;
-    req.user.email = email;
-    req.user.phone = phone;
-    await req.user.save();
-    return sendSuccess(res, "Profile updated", { user: req.user });
-  } catch (err) {
-    return sendError(res, 500, "Failed to update profile", err.message);
-  }
-});
-
-// Change password
-app.post("/auth/change-password", authMiddleware, async (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
-    if (!currentPassword || !newPassword) {
-      return sendError(res, 400, "Current and new password are required");
-    }
-    if (newPassword.length < 6) {
-      return sendError(res, 400, "New password must be at least 6 characters");
-    }
-
-    // Reload full user document with password for verification
-    const currentUser = await User.findById(req.user._id);
-    if (!currentUser) {
-      return sendError(res, 404, "User not found");
-    }
-
-    const isMatch = await currentUser.comparePassword(currentPassword);
-    if (!isMatch) {
-      return sendError(res, 401, "Current password is incorrect");
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    currentUser.password = await bcrypt.hash(newPassword, salt);
-    await currentUser.save();
-    return sendSuccess(res, "Password changed successfully");
-  } catch (err) {
-    return sendError(res, 500, "Failed to change password", err.message);
-  }
-});
-
-// Upload profile photo
-app.post("/upload/profile-photo", authMiddleware, upload.single("image"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return sendError(res, 400, "Please upload a profile image");
-    }
-
-    let imageUrl = req.file.secure_url || req.file.path || req.file.filename || "";
-    if (!cloudinaryConfigured && req.file.filename) {
-      imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
-    }
-
-    req.user.avatar = imageUrl;
-    await req.user.save();
-
-    return sendSuccess(res, "Profile photo uploaded", { user: req.user, imageUrl });
-  } catch (err) {
-    return sendError(res, 500, "Failed to upload profile photo", err.message);
-  }
-});
-
-app.delete("/upload/profile-photo", authMiddleware, async (req, res) => {
-  try {
-    req.user.avatar = "";
-    await req.user.save();
-    return sendSuccess(res, "Profile photo deleted", { user: req.user });
-  } catch (err) {
-    return sendError(res, 500, "Failed to delete profile photo", err.message);
-  }
-});
-
-// Upload expense receipt image
-app.post("/upload/expense-receipt", authMiddleware, upload.single("image"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return sendError(res, 400, "Please upload a receipt image");
-    }
-
-    const imageUrl = req.file.path || req.file.secure_url || req.file.filename || "";
-    return sendSuccess(res, "Receipt uploaded", { imageUrl });
-  } catch (err) {
-    return sendError(res, 500, "Failed to upload receipt", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -502,8 +386,7 @@ mongoose
   .catch((err) => console.error(err));
 
 // ✅ Start server
-const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(5000, () => {
+  console.log("Server running on port 5000");
 });
 
