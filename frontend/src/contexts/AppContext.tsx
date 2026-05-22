@@ -89,7 +89,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const token = localStorage.getItem("auth_token");
+<<<<<<< HEAD
       const res = await fetch("http://localhost:8000/expenses", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+=======
+      const res = await fetch("http://localhost:5000/expenses", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+>>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
       const body = await res.json();
       if (!res.ok) {
         const message = body?.message || body?.error || `HTTP ${res.status}`;
@@ -136,7 +140,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // ─── CRUD ─────────────────────────────────────────────────────────────────
   const addTransaction = useCallback(async (t: Omit<Transaction, "id">) => {
     const token = localStorage.getItem("auth_token");
+<<<<<<< HEAD
     const res = await fetch("http://localhost:8000/add-expense", {
+=======
+    const res = await fetch("http://localhost:5000/add-expense", {
+>>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
       method: "POST",
       headers: Object.assign({ "Content-Type": "application/json" }, token ? { Authorization: `Bearer ${token}` } : {}),
       body: JSON.stringify({
@@ -162,7 +170,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateTransaction = useCallback(async (t: Transaction) => {
     try {
       const token = localStorage.getItem("auth_token");
+<<<<<<< HEAD
       const res = await fetch(`http://localhost:8000/expenses/${t.id}`, {
+=======
+      const res = await fetch(`http://localhost:5000/expenses/${t.id}`, {
+>>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
         method: "PUT",
         headers: Object.assign({ "Content-Type": "application/json" }, token ? { Authorization: `Bearer ${token}` } : {}),
         body: JSON.stringify({
@@ -192,7 +204,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const deleteTransaction = useCallback(async (id: string) => {
     const token = localStorage.getItem("auth_token");
+<<<<<<< HEAD
     const res = await fetch(`http://localhost:8000/expenses/${id}`, { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+=======
+    const res = await fetch(`http://localhost:5000/expenses/${id}`, { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+>>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
     const body = await res.json();
     if (!res.ok) {
       const message = body?.message || body?.error || `HTTP ${res.status}`;

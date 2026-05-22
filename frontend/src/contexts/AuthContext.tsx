@@ -36,7 +36,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
+<<<<<<< HEAD
         const res = await fetch("http://localhost:8000/auth/me", {
+=======
+        const res = await fetch("http://localhost:5000/auth/me", {
+>>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error("Session invalid");
@@ -150,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+<<<<<<< HEAD
   const updateProfile = async (data: Partial<User>): Promise<boolean> => {
     if (!user) return false;
 
@@ -199,6 +204,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Profile update error:", error);
       return false;
     }
+=======
+  const updateProfile = (data: Partial<User>) => {
+    if (user) {
+      const updatedUser = { ...user, ...data };
+      setUser(updatedUser);
+      localStorage.setItem("user_data", JSON.stringify(updatedUser));
+    }
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
+    // Backend password change endpoint not implemented yet; return false
+    return false;
+  };
+
+  // Helper: return headers including Authorization when token is present
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("auth_token");
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return headers;
+>>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
   };
 
   const changePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
@@ -233,7 +259,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
+<<<<<<< HEAD
     <AuthContext.Provider value={{
+=======
+    <AuthContext.Provider value={{ 
+>>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
       isAuthenticated,
       isAuthReady,
       user,

@@ -95,7 +95,11 @@ const Profile = () => {
       const formData = new FormData();
       formData.append("image", file);
 
+<<<<<<< HEAD
       const res = await fetch("http://localhost:8000/upload/profile-photo", {
+=======
+      const res = await fetch("http://localhost:5000/upload/profile-photo", {
+>>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
@@ -110,6 +114,7 @@ const Profile = () => {
 
       const imageUrl = data?.data?.imageUrl || data?.imageUrl;
       if (imageUrl) {
+<<<<<<< HEAD
         const profileUpdated = await updateProfile({ avatar: imageUrl });
         if (profileUpdated) {
           toast.success("Profile photo uploaded successfully");
@@ -118,6 +123,11 @@ const Profile = () => {
           toast.error("Profile photo uploaded but failed to refresh profile");
           setMessage("Profile photo uploaded but failed to refresh profile");
         }
+=======
+        updateProfile({ avatar: imageUrl });
+        toast.success("Profile photo uploaded successfully");
+        setMessage("Profile photo updated successfully!");
+>>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
       }
     } catch (err) {
       toast.error("Failed to upload profile photo");
@@ -129,6 +139,7 @@ const Profile = () => {
     }
   };
 
+<<<<<<< HEAD
   const handleDeleteProfilePhoto = async () => {
     if (!user?.avatar) {
       setMessage("No profile photo to delete.");
@@ -169,6 +180,8 @@ const Profile = () => {
     }
   };
 
+=======
+>>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -294,6 +307,7 @@ const Profile = () => {
                       className="hidden"
                       onChange={handleProfilePhotoChange}
                     />
+<<<<<<< HEAD
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -327,6 +341,21 @@ const Profile = () => {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+=======
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="absolute -bottom-2 -right-2 rounded-full w-8 h-8 p-0"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingPhoto}
+                    >
+                      {uploadingPhoto ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                      ) : (
+                        <Camera className="w-4 h-4" />
+                      )}
+                    </Button>
+>>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
                   </div>
                   <div className="flex-1">
                     <CardTitle className="text-2xl mb-1">{user?.name}</CardTitle>
