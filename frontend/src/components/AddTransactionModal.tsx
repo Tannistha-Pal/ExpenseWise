@@ -44,11 +44,7 @@ export function AddTransactionModal({ open, onOpenChange, onAdd }: Props) {
 
     setUploadingReceipt(true);
     try {
-<<<<<<< HEAD
       const response = await fetch("http://localhost:8000/upload/expense-receipt", {
-=======
-      const response = await fetch("http://localhost:5000/upload/expense-receipt", {
->>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
@@ -82,11 +78,7 @@ export function AddTransactionModal({ open, onOpenChange, onAdd }: Props) {
     try {
       const token = localStorage.getItem("auth_token");
       const receiptUrl = receiptFile ? await uploadReceiptFile() : undefined;
-<<<<<<< HEAD
       const res = await fetch("http://localhost:8000/add-expense", {
-=======
-      const res = await fetch("http://localhost:5000/add-expense", {
->>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
         method: "POST",
         headers: Object.assign({ "Content-Type": "application/json" }, token ? { Authorization: `Bearer ${token}` } : {}),
         body: JSON.stringify({

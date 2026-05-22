@@ -9,10 +9,6 @@ import { useAppContext } from "@/contexts/AppContext";
 import { useCurrency } from "@/hooks/useCurrency";
 import { SummaryCard } from "@/components/SummaryCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-<<<<<<< HEAD
-=======
-import { useNavigate } from "react-router-dom";
->>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
 import ThemeToggle from "@/components/ThemeToggle";
 
 const PIE_COLORS = ["#3b82f6", "#14b8a6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
@@ -84,13 +80,7 @@ export default function DashboardPage() {
           <h2 className="text-3xl font-bold text-foreground">Dashboard</h2>
           <p className="text-muted-foreground">Overview of your finances</p>
         </div>
-<<<<<<< HEAD
         <ThemeToggle />
-=======
-        <div className="flex items-center gap-3">
-          <ThemeToggle />
-        </div>
->>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
       </div>
 
       {/* Summary Cards */}

@@ -38,7 +38,7 @@ const ALL_CATEGORIES = [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES];
 
 
 export default function TransactionsPage() {
-  const { transactions, deleteTransaction, updateTransaction, loading, error, refreshTransactions } = useAppContext();
+  const { transactions, deleteTransaction, updateTransaction, loading, error, refreshTransactions, fetchTransactionsPage } = useAppContext();
   const { formatAmount } = useCurrency();
 
   // State for search, filters, sorting, and pagination
@@ -53,6 +53,15 @@ export default function TransactionsPage() {
   const [endDate, setEndDate] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [selectedYear, setSelectedYear] = useState<string>("all");
+  const [pageTransactions, setPageTransactions] = useState<typeof transactions>([]);
+  const [pagePagination, setPagePagination] = useState({
+    total: 0,
+    totalPages: 0,
+    page: 1,
+    limit: 10,
+  });
+  const [pageLoading, setPageLoading] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
 
   // Dialog states
   const [deleteTxId, setDeleteTxId] = useState<string | null>(null);
@@ -156,12 +165,8 @@ export default function TransactionsPage() {
     sortBy,
   ]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredAndSorted.length / pageSize);
-  const paginatedTransactions = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredAndSorted.slice(start, start + pageSize);
-  }, [filteredAndSorted, currentPage, pageSize]);
+  const totalPages = pagePagination.totalPages;
+  const paginatedTransactions = pageTransactions;
 
   // Stats
   const stats = useMemo(() => {
@@ -183,17 +188,67 @@ export default function TransactionsPage() {
     );
   }, [debouncedSearch, filteredAndSorted.length]);
 
+  const loadTransactionsPage = useCallback(async () => {
+    setPageLoading(true);
+    setPageError(null);
+    try {
+      const result = await fetchTransactionsPage({
+        page: currentPage,
+        limit: pageSize,
+        search: debouncedSearch,
+        type: typeFilter,
+        category: categoryFilter,
+        startDate,
+        endDate,
+        month: selectedMonth,
+        year: selectedYear,
+        sortBy,
+      });
+      setPageTransactions(result.transactions);
+      setPagePagination(result.pagination);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to load transactions";
+      setPageError(message);
+      setPageTransactions([]);
+      setPagePagination({ total: 0, totalPages: 0, page: currentPage, limit: pageSize });
+    } finally {
+      setPageLoading(false);
+    }
+  }, [
+    fetchTransactionsPage,
+    currentPage,
+    pageSize,
+    debouncedSearch,
+    typeFilter,
+    categoryFilter,
+    startDate,
+    endDate,
+    selectedMonth,
+    selectedYear,
+    sortBy,
+  ]);
+
+  useEffect(() => {
+    loadTransactionsPage();
+  }, [loadTransactionsPage, transactions.length]);
+
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   // Handle pagination
   const handlePreviousPage = () => {
     setCurrentPage((prev) => Math.max(1, prev - 1));
   };
 
   const handleNextPage = () => {
-    setCurrentPage((prev) => Math.min(totalPages, prev + 1));
+    setCurrentPage((prev) => Math.min(Math.max(totalPages, 1), prev + 1));
   };
 
   const handlePageChange = (page: number) => {
-    setCurrentPage(page);
+    setCurrentPage(Math.min(Math.max(page, 1), Math.max(totalPages, 1)));
   };
 
   // Reset filters
@@ -203,7 +258,8 @@ export default function TransactionsPage() {
     setCategoryFilter("all");
     setStartDate("");
     setEndDate("");
-    setSelectedMonth("");
+    setSelectedMonth("all");
+    setSelectedYear("all");
     setSortBy("latest");
     setCurrentPage(1);
     toast.success("Filters reset");
@@ -240,6 +296,7 @@ export default function TransactionsPage() {
     if (!deleteTxId) return;
     try {
       await deleteTransaction(deleteTxId);
+      await loadTransactionsPage();
       toast.success("Transaction deleted");
     } catch (err) {
       console.error("Delete failed:", err);
@@ -275,6 +332,7 @@ export default function TransactionsPage() {
 
     try {
       await updateTransaction(updatedTransaction);
+      await loadTransactionsPage();
       setEditTx(null);
       toast.success("Transaction updated");
     } catch (err) {
@@ -391,7 +449,7 @@ export default function TransactionsPage() {
           {/* Sorting */}
           <div>
             <Label className="text-xs mb-2 block">Sort By</Label>
-            <Select value={sortBy} onValueChange={setSortBy}>
+            <Select value={sortBy} onValueChange={(value) => { setSortBy(value); setCurrentPage(1); }}>
               <SelectTrigger className="h-9">
                 <SelectValue />
               </SelectTrigger>
@@ -477,7 +535,7 @@ export default function TransactionsPage() {
 
       {/* Transactions Table */}
       <div className="rounded-lg border bg-card overflow-hidden">
-        {loading ? (
+        {loading || pageLoading ? (
           <div className="text-center py-16">
             <div className="inline-block">
               <div className="relative">
@@ -486,18 +544,18 @@ export default function TransactionsPage() {
             </div>
             <p className="mt-4 text-muted-foreground">Loading transactions...</p>
           </div>
-        ) : error ? (
+        ) : error || pageError ? (
           <div className="text-center py-16">
             <div className="text-muted-foreground mb-4">
               <p className="text-lg font-medium">Unable to load transactions</p>
-              <p className="text-sm mb-4">{error}</p>
-              <Button onClick={refreshTransactions}>Retry</Button>
+              <p className="text-sm mb-4">{error || pageError}</p>
+              <Button onClick={() => { refreshTransactions(); loadTransactionsPage(); }}>Retry</Button>
             </div>
           </div>
         ) : paginatedTransactions.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-muted-foreground mb-4">
-              {filteredAndSorted.length === 0 && transactions.length > 0 ? (
+              {pagePagination.total === 0 && transactions.length > 0 ? (
                 <>
                   <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p className="text-lg font-medium">No transactions found</p>
@@ -590,9 +648,9 @@ export default function TransactionsPage() {
             {/* Pagination */}
             <div className="border-t bg-muted/50 px-4 py-3 flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
-                Showing {(currentPage - 1) * pageSize + 1} to{" "}
-                {Math.min(currentPage * pageSize, filteredAndSorted.length)} of{" "}
-                {filteredAndSorted.length}
+                Showing {pagePagination.total === 0 ? 0 : (currentPage - 1) * pageSize + 1} to{" "}
+                {Math.min(currentPage * pageSize, pagePagination.total)} of{" "}
+                {pagePagination.total}
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -634,7 +692,7 @@ export default function TransactionsPage() {
                   variant="outline"
                   size="sm"
                   onClick={handleNextPage}
-                  disabled={currentPage === totalPages}
+                  disabled={totalPages <= 1 || currentPage === totalPages}
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>

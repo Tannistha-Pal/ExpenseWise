@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { AddTransactionModal } from "@/components/AddTransactionModal";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAppContext } from "@/contexts/AppContext";
 
 const navItems = [
   { title: "Home", path: "/", icon: Home },
@@ -29,9 +30,9 @@ const navItems = [
 export function AppSidebar() {
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const { refreshTransactions } = useAppContext();
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [, forceUpdate] = useState({});
 
   const handleLogout = () => {
     logout();
@@ -39,7 +40,7 @@ export function AppSidebar() {
   };
 
   const handleTransactionAdded = () => {
-    forceUpdate({});
+    refreshTransactions();
   };
 
   const sidebarContent = (

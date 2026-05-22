@@ -7,12 +7,17 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 5173,
-    strictPort: false,
+    strictPort: true,
     hmr: {
       overlay: false,
     },
     proxy: {
       '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/auth': {
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
@@ -28,6 +33,11 @@ export default defineConfig(({ mode }) => ({
         secure: false,
       },
       '/delete-expense': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/upload': {
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,

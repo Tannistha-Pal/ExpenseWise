@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
+const API_URL = "http://localhost:8000";
+
 interface User {
   id: string;
   name: string;
@@ -22,12 +24,23 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function normalizeUser(raw: any): User {
+  return {
+    id: raw._id || raw.id,
+    name: raw.name,
+    email: raw.email,
+    phone: raw.phone,
+    avatar: raw.avatar || "",
+    createdAt: raw.createdAt,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+
   useEffect(() => {
-    // Try to restore session from token, validate with backend
     const init = async () => {
       const token = localStorage.getItem("auth_token");
       if (!token) {
@@ -36,26 +49,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-<<<<<<< HEAD
-        const res = await fetch("http://localhost:8000/auth/me", {
-=======
-        const res = await fetch("http://localhost:5000/auth/me", {
->>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
+        const res = await fetch(`${API_URL}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error("Session invalid");
-        const { user } = await res.json();
-        // Normalize _id to id if needed
-        const normalized = {
-          id: user._id || user.id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone,
-          avatar: user.avatar || "",
-          createdAt: user.createdAt,
-        };
+        const body = await res.json();
+        const normalized = normalizeUser(body?.data?.user || body?.user);
         localStorage.setItem("user_data", JSON.stringify(normalized));
-        setUser(normalized as User);
+        setUser(normalized);
         setIsAuthenticated(true);
       } catch (err) {
         console.warn("Session restore failed:", err);
@@ -72,35 +73,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signup = async (name: string, email: string, phone: string, password: string): Promise<boolean> => {
     try {
-      const res = await fetch("http://localhost:8000/auth/signup", {
+      const res = await fetch(`${API_URL}/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, phone, password }),
       });
-
+      const body = await res.json();
       if (!res.ok) {
-        const errorData = await res.json();
-        console.error("Signup failed:", errorData.error);
+        console.error("Signup failed:", body.error || body.message);
         return false;
       }
 
-      const { user, token } = await res.json();
+      const token = body?.data?.token || body?.token;
+      const normalized = normalizeUser(body?.data?.user || body?.user);
       if (!token) throw new Error("No token returned from server");
-
-      const normalized = {
-        id: user._id || user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        avatar: user.avatar || "",
-        createdAt: user.createdAt,
-      };
 
       localStorage.setItem("auth_token", token);
       localStorage.setItem("user_data", JSON.stringify(normalized));
       setIsAuthenticated(true);
-      setUser(normalized as User);
-
+      setUser(normalized);
       return true;
     } catch (error) {
       console.error("Signup error:", error);
@@ -110,36 +101,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-      const res = await fetch("http://localhost:8000/auth/login", {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: normalizedEmail, password }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
-
+      const body = await res.json();
       if (!res.ok) {
-        const errorData = await res.json();
-        console.error("Login failed:", errorData.error);
+        console.error("Login failed:", body.error || body.message);
         return false;
       }
 
-      const { user, token } = await res.json();
+      const token = body?.data?.token || body?.token;
+      const normalized = normalizeUser(body?.data?.user || body?.user);
       if (!token) throw new Error("No token returned from server");
-
-      const normalized = {
-        id: user._id || user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        avatar: user.avatar || "",
-        createdAt: user.createdAt,
-      };
 
       localStorage.setItem("auth_token", token);
       localStorage.setItem("user_data", JSON.stringify(normalized));
       setIsAuthenticated(true);
-      setUser(normalized as User);
-      
+      setUser(normalized);
       return true;
     } catch (error) {
       console.error("Login error:", error);
@@ -154,24 +134,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-<<<<<<< HEAD
   const updateProfile = async (data: Partial<User>): Promise<boolean> => {
     if (!user) return false;
 
-    const hasAvatarOnly = data.avatar !== undefined && data.name === undefined && data.email === undefined && data.phone === undefined;
-    if (hasAvatarOnly) {
-      const normalized = {
-        ...user,
-        avatar: data.avatar,
-      };
-      setUser(normalized as User);
-      localStorage.setItem("user_data", JSON.stringify(normalized));
-      return true;
-    }
-
     try {
       const token = localStorage.getItem("auth_token");
-      const res = await fetch("http://localhost:8000/auth/profile", {
+      const res = await fetch(`${API_URL}/auth/profile`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -181,56 +149,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           name: data.name ?? user.name,
           email: data.email ?? user.email,
           phone: data.phone ?? user.phone,
+          avatar: data.avatar ?? user.avatar ?? "",
         }),
       });
+      const body = await res.json();
       if (!res.ok) {
-        const errorData = await res.json();
-        console.error("Profile update failed:", errorData.error);
+        console.error("Profile update failed:", body.error || body.message);
         return false;
       }
-      const { user: updatedUser } = await res.json();
-      const normalized = {
-        id: updatedUser._id || updatedUser.id,
-        name: updatedUser.name,
-        email: updatedUser.email,
-        phone: updatedUser.phone,
-        avatar: updatedUser.avatar || "",
-        createdAt: updatedUser.createdAt,
-      };
-      setUser(normalized as User);
+
+      const normalized = normalizeUser(body?.data?.user || body?.user);
+      setUser(normalized);
       localStorage.setItem("user_data", JSON.stringify(normalized));
       return true;
     } catch (error) {
       console.error("Profile update error:", error);
       return false;
     }
-=======
-  const updateProfile = (data: Partial<User>) => {
-    if (user) {
-      const updatedUser = { ...user, ...data };
-      setUser(updatedUser);
-      localStorage.setItem("user_data", JSON.stringify(updatedUser));
-    }
-  };
-
-  const changePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
-    // Backend password change endpoint not implemented yet; return false
-    return false;
-  };
-
-  // Helper: return headers including Authorization when token is present
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem("auth_token");
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    return headers;
->>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
   };
 
   const changePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
     try {
       const token = localStorage.getItem("auth_token");
-      const res = await fetch("http://localhost:8000/auth/change-password", {
+      const res = await fetch(`${API_URL}/auth/change-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -238,9 +179,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ currentPassword, newPassword }),
       });
+      const body = await res.json();
       if (!res.ok) {
-        const errorData = await res.json();
-        console.error("Change password failed:", errorData.error);
+        console.error("Change password failed:", body.error || body.message);
         return false;
       }
       return true;
@@ -250,20 +191,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Helper: return headers including Authorization when token is present
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem("auth_token");
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    return headers;
-  };
-
   return (
-<<<<<<< HEAD
     <AuthContext.Provider value={{
-=======
-    <AuthContext.Provider value={{ 
->>>>>>> aca72802e4780e03e4d729578f9be3896f1803c6
       isAuthenticated,
       isAuthReady,
       user,
@@ -281,8 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error("useAuth must be used within AuthProvider");
   }
   return context;
 }
-

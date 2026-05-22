@@ -1,371 +1,60 @@
+require("dotenv").config();
+
 const express = require("express");
 const path = require("path");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const bcrypt = require("bcryptjs");
-const Expense = require("./models/Expense");
-const User = require("./models/User");
+const authRoutes = require("./routes/authRoutes");
+const expenseRoutes = require("./routes/expenseRoutes");
+const uploadRoutes = require("./routes/uploadRoutes");
+const { sendError } = require("./utils/responses");
 
 const app = express();
+const PORT = Number(process.env.PORT) || 8000;
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/expensewise";
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
 
-// ✅ Middleware
+const allowedOrigins = new Set([
+  FRONTEND_ORIGIN,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+]);
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
+      if (!origin) return callback(null, true);
       try {
         const parsed = new URL(origin);
-        const isLocalhost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
-        if (isLocalhost) {
-          callback(null, true);
-          return;
-        }
+        const isLocalDev = ["localhost", "127.0.0.1"].includes(parsed.hostname);
+        if (isLocalDev || allowedOrigins.has(origin)) return callback(null, true);
       } catch {
-        // ignore invalid origin
+        return callback(new Error("CORS policy: invalid origin"));
       }
-      if (origin === process.env.FRONTEND_ORIGIN) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error("CORS policy: Origin not allowed"));
+      return callback(new Error("CORS policy: origin not allowed"));
     },
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-const JWT_SECRET = process.env.JWT_SECRET || "replace_me_in_env";
-
-const sendSuccess = (res, message, data = {}) => {
-  return res.status(200).json({ success: true, message, data, ...data });
-};
-
-const sendError = (res, status, message, error = null) => {
-  return res.status(status).json({ success: false, message, data: null, error });
-};
-
-// ✅ Test route
 app.get("/", (req, res) => {
-  res.send("API WORKING");
+  res.json({ success: true, message: "ExpenseWise API working" });
+});
+app.get("/health", (req, res) => {
+  res.json({ success: true, status: "ok", database: mongoose.connection.readyState });
 });
 
-// Protect routes with token verification
-const authMiddleware = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return sendError(res, 401, "Authorization header missing or malformed", "Authorization header missing or malformed");
-    }
+app.use("/auth", authRoutes);
+app.use("/expenses", expenseRoutes);
+app.use("/add-expense", expenseRoutes);
+app.use("/upload", uploadRoutes);
 
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.id).select("-password");
-    if (!user) return sendError(res, 401, "Invalid token: user not found", "Invalid token: user not found");
-
-    req.user = user;
-    next();
-  } catch (err) {
-    return sendError(res, 401, "Invalid or expired token", err.message);
-  }
-};
-
-app.get("/expenses", authMiddleware, async (req, res) => {
-  try {
-    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
-    const category = typeof req.query.category === "string" ? req.query.category.trim() : "";
-    const type = typeof req.query.type === "string" ? req.query.type.trim() : "";
-    const month = typeof req.query.month === "string" ? parseInt(req.query.month, 10) : null;
-    const year = typeof req.query.year === "string" ? parseInt(req.query.year, 10) : null;
-    const startDate = typeof req.query.startDate === "string" && req.query.startDate ? new Date(req.query.startDate) : null;
-    const endDate = typeof req.query.endDate === "string" && req.query.endDate ? new Date(req.query.endDate) : null;
-    const sortBy = typeof req.query.sortBy === "string" ? req.query.sortBy : "latest";
-    const page = typeof req.query.page === "string" ? Math.max(parseInt(req.query.page, 10) || 1, 1) : 1;
-    const limit = typeof req.query.limit === "string" ? Math.max(parseInt(req.query.limit, 10) || 10, 1) : 10;
-    const sortOrderParam = typeof req.query.sortOrder === "string" ? req.query.sortOrder : "desc";
-    const sortOrder = sortOrderParam.toLowerCase() === "asc" ? 1 : -1;
-
-    const filter = { userId: req.user._id };
-
-    if (search) {
-      const orQuery = [
-        { title: { $regex: search, $options: "i" } },
-        { category: { $regex: search, $options: "i" } },
-        { type: { $regex: `^${search}$`, $options: "i" } },
-      ];
-
-      const numericSearch = Number(search);
-      if (!Number.isNaN(numericSearch)) {
-        orQuery.push({ amount: numericSearch });
-      }
-
-      filter.$or = orQuery;
-    }
-
-    if (category && category.toLowerCase() !== "all") {
-      filter.category = category;
-    }
-
-    if (type && type.toLowerCase() !== "all") {
-      filter.type = type;
-    }
-
-    if (startDate || endDate) {
-      filter.date = {};
-      if (startDate) filter.date.$gte = startDate;
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        filter.date.$lte = end;
-      }
-    }
-
-    if (month !== null && year !== null && !Number.isNaN(month) && !Number.isNaN(year)) {
-      const start = new Date(year, month, 1);
-      const end = new Date(year, month + 1, 0, 23, 59, 59, 999);
-      filter.date = { $gte: start, $lte: end };
-    }
-
-    const total = await Expense.countDocuments(filter);
-
-    const sort = {};
-    if (sortBy === "latest") {
-      sort.date = -1;
-    } else if (sortBy === "oldest") {
-      sort.date = 1;
-    } else if (sortBy === "highest") {
-      sort.amount = -1;
-    } else if (sortBy === "lowest") {
-      sort.amount = 1;
-    } else if (sortBy === "date") {
-      sort.date = sortOrder;
-    } else if (sortBy === "amount") {
-      sort.amount = sortOrder;
-    } else {
-      sort.date = -1;
-    }
-
-    const skip = (page - 1) * limit;
-    const expenses = await Expense.find(filter)
-      .sort(sort)
-      .skip(skip)
-      .limit(limit)
-      .lean();
-
-    const totalPages = Math.ceil(total / limit);
-
-    return sendSuccess(res, "Expenses fetched", {
-      expenses,
-      pagination: {
-        total,
-        totalPages,
-        page,
-        limit,
-      },
-    });
-  } catch (err) {
-    console.error("❌ Fetch error:", err?.message ?? err);
-    return sendError(res, 500, "Failed to fetch expenses", err?.message ?? "Unknown error");
-  }
+app.use((req, res) => {
+  return sendError(res, 404, "Route not found");
 });
 
-// ✅ Add expense
-app.post("/add-expense", authMiddleware, async (req, res) => {
-  try {
-    const { title, amount, type, category, date, receiptUrl } = req.body;
-    const amountValue = Number(amount);
-    const validTypes = ["income", "expense"];
-
-    if (!title || title.trim().length === 0) {
-      return sendError(res, 400, "Title is required");
-    }
-
-    if (isNaN(amountValue) || amountValue <= 0) {
-      return sendError(res, 400, "Amount must be a number greater than 0");
-    }
-
-    if (!type || !validTypes.includes(type)) {
-      return sendError(res, 400, "Type must be either 'income' or 'expense'");
-    }
-
-    const expense = new Expense({ 
-      title: title.trim(),
-      amount: amountValue,
-      type, 
-      category: category || "General", 
-      date: date ? new Date(date) : new Date(),
-      receiptUrl: receiptUrl || "",
-      userId: req.user._id,
-      createdBy: req.user.name,
-    });
-    const saved = await expense.save();
-    console.log("✅ Saved to MongoDB:", saved);
-    return sendSuccess(res, "Expense saved", { expense: saved });
-  } catch (err) {
-    console.error("❌ Save error:", err.message);
-    return sendError(res, 500, "Failed to save expense", err.message);
-  }
-});
-
-// ✅ Update expense
-app.put("/expenses/:id", authMiddleware, async (req, res) => {
-  try {
-    const { title, amount, type, category, date, receiptUrl } = req.body;
-    const amountValue = Number(amount);
-    const validTypes = ["income", "expense"];
-
-    if (!title || title.trim().length === 0) {
-      return sendError(res, 400, "Title is required");
-    }
-
-    if (isNaN(amountValue) || amountValue <= 0) {
-      return sendError(res, 400, "Amount must be a number greater than 0");
-    }
-
-    if (!type || !validTypes.includes(type)) {
-      return sendError(res, 400, "Type must be either 'income' or 'expense'");
-    }
-
-    const expense = await Expense.findById(req.params.id);
-    if (!expense) return sendError(res, 404, "Transaction not found");
-    if (expense.userId.toString() !== req.user._id.toString()) {
-      return sendError(res, 403, "Not authorized to update this expense");
-    }
-
-    expense.title = title.trim();
-    expense.amount = amountValue;
-    expense.type = type;
-    expense.category = category || expense.category || "General";
-    expense.date = date ? new Date(date) : expense.date || new Date();
-    expense.receiptUrl = receiptUrl !== undefined ? receiptUrl : expense.receiptUrl;
-    expense.createdBy = expense.createdBy || req.user.name;
-    const updatedExpense = await expense.save();
-
-    return sendSuccess(res, "Expense updated", { expense: updatedExpense });
-  } catch (err) {
-    console.error("❌ Update error:", err.message);
-    return sendError(res, 500, "Failed to update expense", err.message);
-  }
-});
-
-// ✅ Delete expense
-app.delete("/expenses/:id", authMiddleware, async (req, res) => {
-  try {
-    const expense = await Expense.findById(req.params.id);
-    if (!expense) return sendError(res, 404, "Transaction not found");
-    if (expense.userId.toString() !== req.user._id.toString()) {
-      return sendError(res, 403, "Not authorized to delete this expense");
-    }
-    await expense.remove();
-    return sendSuccess(res, "Expense deleted", {});
-  } catch (err) {
-    return sendError(res, 500, "Failed to delete expense", err.message);
-  }
-});
-
-// ✅ User Signup
-app.post("/auth/signup", async (req, res) => {
-  try {
-    const { name, email, phone, password } = req.body;
-
-    // Validate required fields
-    if (!name || !email || !phone || !password) {
-      return sendError(res, 400, "All fields are required", "All fields are required");
-    }
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return sendError(res, 400, "User with this email already exists", "User with this email already exists");
-    }
-
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Create new user with hashed password
-    const user = new User({ 
-      name, 
-      email, 
-      phone, 
-      password: hashedPassword 
-    });
-    
-    const savedUser = await user.save();
-
-    // Generate JWT token
-    const token = jwt.sign({ id: savedUser._id, email: savedUser.email }, JWT_SECRET, { expiresIn: "7d" });
-
-    console.log("✅ User saved to MongoDB:", savedUser);
-    return res.status(201).json({ 
-      success: true,
-      message: "User created successfully",
-      data: { user: savedUser, token },
-      user: savedUser,
-      token,
-    });
-  } catch (err) {
-    console.error("❌ Signup error:", err.message);
-    return sendError(res, 500, "Signup failed", err.message);
-  }
-});
-
-// ✅ User Login
-app.post("/auth/login", async (req, res) => {
-  try {
-    let { email, password } = req.body;
-
-    // Validate required fields
-    if (!email || !password) {
-      return sendError(res, 400, "Email and password are required", "Email and password are required");
-    }
-
-    email = String(email).trim().toLowerCase();
-    password = String(password);
-
-    // Find user by email
-    const user = await User.findOne({ email });
-    if (!user) {
-      return sendError(res, 401, "Invalid email or password", "Invalid email or password");
-    }
-
-    // Compare password
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      return sendError(res, 401, "Invalid email or password", "Invalid email or password");
-    }
-
-    // Generate JWT token
-    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, { expiresIn: "7d" });
-
-    console.log("✅ User logged in:", user.email);
-    return res.json({ 
-      success: true,
-      message: "Login successful",
-      data: { user, token },
-      user,
-      token,
-    });
-  } catch (err) {
-    console.error("❌ Login error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ✅ Get all users (for testing)
-app.get("/auth/users", async (req, res) => {
-  try {
-    const users = await User.find().select("-password");
-    return sendSuccess(res, "Users fetched", { users });
-  } catch (err) {
-    return sendError(res, 500, "Failed to fetch users", err.message);
-  }
-});
-
-// Multer error handler
 app.use((err, req, res, next) => {
   if (err && err.name === "MulterError") {
     if (err.code === "LIMIT_FILE_SIZE") {
@@ -376,17 +65,25 @@ app.use((err, req, res, next) => {
   if (err && err.message === "Only image files are allowed") {
     return sendError(res, 400, "Upload failed: only image files are allowed", err.message);
   }
-  next(err);
+  if (err && err.message && err.message.startsWith("CORS policy")) {
+    return sendError(res, 403, err.message);
+  }
+
+  console.error("Unhandled error:", err);
+  return sendError(res, 500, "Internal server error", err?.message || "Unknown error");
 });
 
-// ✅ Connect MongoDB
 mongoose
-  .connect(process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/expensewise")
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error(err));
+  .connect(MONGODB_URI)
+  .then(() => {
+    console.log("MongoDB connected");
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("MongoDB connection failed:", err.message);
+    process.exit(1);
+  });
 
-// ✅ Start server
-app.listen(5000, () => {
-  console.log("Server running on port 5000");
-});
-
+module.exports = app;
