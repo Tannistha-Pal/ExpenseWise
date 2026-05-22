@@ -4,13 +4,14 @@ import { useState } from "react";
 import { useNavigate, NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import ThemeToggle from "./ThemeToggle";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const navigate = useNavigate();
   const { scrollY } = useScroll();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   // Updated to check authentication status
   const handleGetStartedClick = () => {
@@ -92,12 +93,20 @@ const Navbar = () => {
             
             {isAuthenticated ? (
               <motion.div
-                className="gradient-btn px-6 py-2.5 rounded-xl text-white font-semibold shadow-lg glow-primary cursor-pointer flex items-center gap-2"
+                className="gradient-btn px-4 py-2.5 rounded-full text-white font-semibold shadow-lg glow-primary cursor-pointer flex items-center gap-3"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => navigate("/profile")}
               >
-                <User className="w-4 h-4" />
+                <Avatar className="h-8 w-8">
+                  {user?.avatar ? (
+                    <AvatarImage src={user.avatar} />
+                  ) : (
+                    <AvatarFallback className="text-sm text-white">
+                      {user?.name?.slice(0, 2).toUpperCase() || "U"}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
                 <span className="relative z-10">Profile</span>
               </motion.div>
             ) : (

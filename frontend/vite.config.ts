@@ -7,28 +7,28 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 5173,
-    strictPort: true,
+    strictPort: false,
     hmr: {
       overlay: false,
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
       },
       '/expenses': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
       },
       '/add-expense': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
       },
       '/delete-expense': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
       },
@@ -41,3 +41,4 @@ export default defineConfig(({ mode }) => ({
     },
   },
 }));
+

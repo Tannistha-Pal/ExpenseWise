@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { Transaction, BudgetCategory, DEFAULT_BUDGETS } from "@/types";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/components/ui/sonner";
 
 export interface BudgetPreferences {
   budgetPercent: number;
@@ -9,6 +11,7 @@ export interface BudgetPreferences {
 interface AppState {
   transactions: Transaction[];
   loading: boolean;
+  error: string | null;
   currency: string;
   budgets: BudgetCategory[];
   budgetPreferences: BudgetPreferences;
@@ -42,22 +45,30 @@ function normaliseTransaction(raw: any): Transaction {
     type: raw.type,
     category: raw.category || 'General', // Backend doesn't have category, provide default
     date: raw.date ? new Date(raw.date).toISOString() : new Date().toISOString(),
+    receiptUrl: raw.receiptUrl || raw.receipt_url || "",
   };
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const { user, isAuthReady } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const storageKey = useCallback(
+    (key: string) => `ew_${user ? `${user.id}_` : ""}${key}`,
+    [user]
+  );
 
   const [currency, setCurrencyState] = useState<string>(() =>
-    loadFromStorage("ew_currency", "INR")
+    loadFromStorage(storageKey("currency"), "INR")
   );
   const [budgetPreferences, setBudgetPreferences] = useState<BudgetPreferences>(() =>
-    loadFromStorage("ew_budget_preferences", { budgetPercent: 60, savingsPercent: 40 })
+    loadFromStorage(storageKey("budget_preferences"), { budgetPercent: 60, savingsPercent: 40 })
   );
 
   const [budgets, setBudgets] = useState<BudgetCategory[]>(() => {
-    const saved = loadFromStorage<BudgetCategory[]>("ew_budgets", DEFAULT_BUDGETS);
+    const saved = loadFromStorage<BudgetCategory[]>(storageKey("budgets"), DEFAULT_BUDGETS);
     const total = saved.reduce((sum, b) => sum + b.limit, 0);
     const bills = saved.find((b) => b.category.toLowerCase() === "bills");
     const others = saved.filter((b) => b.category.toLowerCase() !== "bills");
@@ -74,49 +85,86 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Fetch all transactions from backend ──────────────────────────────────
   const refreshTransactions = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      console.log("Fetching transactions from backend...");
-      const res = await fetch("http://localhost:5000/expenses");
-      console.log("Response status:", res.status, res.statusText);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const raw: any[] = await res.json();
-      console.log("Received data:", raw);
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("http://localhost:8000/expenses", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const body = await res.json();
+      if (!res.ok) {
+        const message = body?.message || body?.error || `HTTP ${res.status}`;
+        setError(message);
+        throw new Error(message);
+      }
+      const raw: any[] = body?.data?.expenses ?? body?.expenses ?? [];
       setTransactions(raw.map(normaliseTransaction));
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to fetch transactions";
+      setError(message);
       console.error("Failed to load transactions from backend:", err);
-      console.error("Error details:", err.message, err.stack);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    if (!isAuthReady) return;
+
+    if (!user) {
+      setTransactions([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     refreshTransactions();
-  }, [refreshTransactions]);
+  }, [refreshTransactions, user, isAuthReady]);
+
+  useEffect(() => {
+    if (!user) {
+      setTransactions([]);
+      return;
+    }
+
+    setCurrencyState(loadFromStorage(storageKey("currency"), "INR"));
+    setBudgetPreferences(
+      loadFromStorage(storageKey("budget_preferences"), { budgetPercent: 60, savingsPercent: 40 })
+    );
+    setBudgets(loadFromStorage<BudgetCategory[]>(storageKey("budgets"), DEFAULT_BUDGETS));
+  }, [user, storageKey]);
 
   // ─── CRUD ─────────────────────────────────────────────────────────────────
   const addTransaction = useCallback(async (t: Omit<Transaction, "id">) => {
-    const res = await fetch("http://localhost:5000/add-expense", {
+    const token = localStorage.getItem("auth_token");
+    const res = await fetch("http://localhost:8000/add-expense", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Object.assign({ "Content-Type": "application/json" }, token ? { Authorization: `Bearer ${token}` } : {}),
       body: JSON.stringify({
         title: t.description, // Backend expects 'title', not 'description'
         amount: t.amount,
         type: t.type,
         category: t.category,
         date: t.date,
+        receiptUrl: t.receiptUrl || "",
       }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const { expense: raw } = await res.json(); // Backend returns 'expense', not 'transaction'
+    const body = await res.json();
+    if (!res.ok) {
+      const message = body?.message || body?.error || `HTTP ${res.status}`;
+      toast.error(message);
+      throw new Error(message);
+    }
+    const raw = body?.data?.expense ?? body?.expense;
     setTransactions((prev) => [normaliseTransaction(raw), ...prev]);
+    toast.success("Expense added successfully");
   }, []);
 
   const updateTransaction = useCallback(async (t: Transaction) => {
     try {
-      const res = await fetch(`http://localhost:5000/expenses/${t.id}`, {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`http://localhost:8000/expenses/${t.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: Object.assign({ "Content-Type": "application/json" }, token ? { Authorization: `Bearer ${token}` } : {}),
         body: JSON.stringify({
           title: t.description, // Backend expects 'title', not 'description'
           amount: t.amount,
@@ -125,33 +173,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           date: t.date,
         }),
       });
-      
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      
-      const { expense: raw } = await res.json();
+      const body = await res.json();
+      if (!res.ok) {
+        const message = body?.message || body?.error || `HTTP ${res.status}`;
+        toast.error(message);
+        throw new Error(message);
+      }
+      const raw = body?.data?.expense ?? body?.expense;
       const updatedTransaction = normaliseTransaction(raw);
-      
-      // Update local state with the updated transaction
       setTransactions((prev) => prev.map((tx) => (tx.id === t.id ? updatedTransaction : tx)));
+      toast.success("Expense updated successfully");
     } catch (err) {
       console.error("Failed to update transaction:", err);
-      // Fallback to optimistic update if backend fails
+      toast.error(err instanceof Error ? err.message : "Failed to update transaction");
       setTransactions((prev) => prev.map((tx) => (tx.id === t.id ? t : tx)));
     }
   }, []);
 
   const deleteTransaction = useCallback(async (id: string) => {
-    const res = await fetch(`http://localhost:5000/expenses/${id}`, { method: "DELETE" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const token = localStorage.getItem("auth_token");
+    const res = await fetch(`http://localhost:8000/expenses/${id}`, { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    const body = await res.json();
+    if (!res.ok) {
+      const message = body?.message || body?.error || `HTTP ${res.status}`;
+      toast.error(message);
+      throw new Error(message);
+    }
     setTransactions((prev) => prev.filter((tx) => tx.id !== id));
-    // Refresh transactions to ensure frontend is in sync with backend
+    toast.success("Expense deleted successfully");
     await refreshTransactions();
   }, [refreshTransactions]);
 
   // ─── Persist non-transaction state ────────────────────────────────────────
-  useEffect(() => { localStorage.setItem("ew_currency", JSON.stringify(currency)); }, [currency]);
-  useEffect(() => { localStorage.setItem("ew_budgets", JSON.stringify(budgets)); }, [budgets]);
-  useEffect(() => { localStorage.setItem("ew_budget_preferences", JSON.stringify(budgetPreferences)); }, [budgetPreferences]);
+  useEffect(() => { localStorage.setItem(storageKey("currency"), JSON.stringify(currency)); }, [currency, storageKey]);
+  useEffect(() => { localStorage.setItem(storageKey("budgets"), JSON.stringify(budgets)); }, [budgets, storageKey]);
+  useEffect(() => { localStorage.setItem(storageKey("budget_preferences"), JSON.stringify(budgetPreferences)); }, [budgetPreferences, storageKey]);
 
   const setCurrency = useCallback((code: string) => setCurrencyState(code), []);
 
@@ -191,6 +247,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       value={{
         transactions,
         loading,
+        error,
         currency,
         budgets,
         budgetPreferences,
@@ -214,3 +271,4 @@ export function useAppContext() {
   if (!ctx) throw new Error("useAppContext must be used within AppProvider");
   return ctx;
 }
+

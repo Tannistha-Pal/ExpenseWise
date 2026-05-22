@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Wallet, TrendingUp, TrendingDown, Hash, Home } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Hash } from "lucide-react";
 import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart,
@@ -9,8 +9,6 @@ import { useAppContext } from "@/contexts/AppContext";
 import { useCurrency } from "@/hooks/useCurrency";
 import { SummaryCard } from "@/components/SummaryCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const PIE_COLORS = ["#3b82f6", "#14b8a6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
@@ -18,7 +16,6 @@ const PIE_COLORS = ["#3b82f6", "#14b8a6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4
 export default function DashboardPage() {
   const { transactions } = useAppContext();
   const { formatAmount } = useCurrency();
-  const navigate = useNavigate();
 
   // Custom tooltip component with white text
   const CustomTooltip = ({ active, payload }: any) => {
@@ -83,17 +80,7 @@ export default function DashboardPage() {
           <h2 className="text-3xl font-bold text-foreground">Dashboard</h2>
           <p className="text-muted-foreground">Overview of your finances</p>
         </div>
-        <div className="flex items-center gap-3">
-          <ThemeToggle />
-          <Button
-            variant="outline"
-            onClick={() => navigate("/")}
-            className="flex items-center gap-2"
-          >
-            <Home className="w-4 h-4" />
-            Home
-          </Button>
-        </div>
+        <ThemeToggle />
       </div>
 
       {/* Summary Cards */}

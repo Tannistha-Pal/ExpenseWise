@@ -1,13 +1,20 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { 
   ArrowLeft, 
   User, 
@@ -29,14 +36,25 @@ const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [message, setMessage] = useState("");
   
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   // Profile form state
   const [formData, setFormData] = useState({
     name: user?.name || "",
     email: user?.email || "",
     phone: user?.phone || ""
   });
+
+  useEffect(() => {
+    setFormData({
+      name: user?.name || "",
+      email: user?.email || "",
+      phone: user?.phone || "",
+    });
+  }, [user]);
   
   // Password change state
   const [passwordData, setPasswordData] = useState({
@@ -51,13 +69,103 @@ const Profile = () => {
     setMessage("");
 
     try {
-      updateProfile(formData);
-      setIsEditing(false);
-      setMessage("Profile updated successfully!");
-    } catch (error) {
-      setMessage("Failed to update profile");
+      const success = await updateProfile(formData);
+      if (success) {
+        setIsEditing(false);
+        setMessage("Profile updated successfully!");
+      } else {
+        setMessage("Failed to update profile. Please check your input or try a different email.");
+      }
+    } catch (error: any) {
+      setMessage(error?.message || "Failed to update profile");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleProfilePhotoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingPhoto(true);
+    setMessage("");
+
+    try {
+      const token = localStorage.getItem("auth_token");
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const res = await fetch("http://localhost:8000/upload/profile-photo", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Unable to upload photo");
+        setMessage(data.error || "Unable to upload photo");
+        return;
+      }
+
+      const imageUrl = data?.data?.imageUrl || data?.imageUrl;
+      if (imageUrl) {
+        const profileUpdated = await updateProfile({ avatar: imageUrl });
+        if (profileUpdated) {
+          toast.success("Profile photo uploaded successfully");
+          setMessage("Profile photo updated successfully!");
+        } else {
+          toast.error("Profile photo uploaded but failed to refresh profile");
+          setMessage("Profile photo uploaded but failed to refresh profile");
+        }
+      }
+    } catch (err) {
+      toast.error("Failed to upload profile photo");
+      setMessage("Failed to upload profile photo");
+      console.error(err);
+    } finally {
+      setUploadingPhoto(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDeleteProfilePhoto = async () => {
+    if (!user?.avatar) {
+      setMessage("No profile photo to delete.");
+      return;
+    }
+
+    setUploadingPhoto(true);
+    setMessage("");
+
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("http://localhost:8000/upload/profile-photo", {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || "Unable to delete photo");
+        setMessage(data.error || "Unable to delete photo");
+        return;
+      }
+
+      const updated = await updateProfile({ avatar: "" });
+      if (updated) {
+        toast.success("Profile photo deleted successfully");
+        setMessage("Profile photo deleted successfully");
+      } else {
+        toast.error("Photo deleted but profile did not refresh");
+        setMessage("Photo deleted but profile did not refresh");
+      }
+    } catch (err) {
+      toast.error("Failed to delete profile photo");
+      setMessage("Failed to delete profile photo");
+      console.error(err);
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -79,16 +187,29 @@ const Profile = () => {
         return;
       }
 
-      const success = await changePassword(passwordData.currentPassword, passwordData.newPassword);
-      if (success) {
+      // Call backend directly to get error message
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("http://localhost:8000/auth/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          currentPassword: passwordData.currentPassword,
+          newPassword: passwordData.newPassword,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
         setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
         setIsChangingPassword(false);
         setMessage("Password changed successfully!");
       } else {
-        setMessage("Current password is incorrect");
+        setMessage(data?.error || "Current password is incorrect or failed to update");
       }
-    } catch (error) {
-      setMessage("Failed to change password");
+    } catch (error: any) {
+      setMessage(error?.message || "Failed to change password");
     } finally {
       setIsLoading(false);
     }
@@ -166,13 +287,46 @@ const Profile = () => {
                         {getInitials(user?.name || "User")}
                       </AvatarFallback>
                     </Avatar>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="absolute -bottom-2 -right-2 rounded-full w-8 h-8 p-0"
-                    >
-                      <Camera className="w-4 h-4" />
-                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleProfilePhotoChange}
+                    />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="absolute -bottom-2 -right-2 rounded-full w-8 h-8 p-0"
+                          disabled={uploadingPhoto}
+                        >
+                          {uploadingPhoto ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                          ) : (
+                            <Camera className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent side="bottom" align="end" className="w-40">
+                        {!user?.avatar ? (
+                          <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
+                            Add Photo
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
+                            Change Photo
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          onSelect={handleDeleteProfilePhoto}
+                          disabled={!user?.avatar || uploadingPhoto}
+                        >
+                          Delete Photo
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   <div className="flex-1">
                     <CardTitle className="text-2xl mb-1">{user?.name}</CardTitle>
@@ -442,3 +596,4 @@ const Profile = () => {
 };
 
 export default Profile;
+

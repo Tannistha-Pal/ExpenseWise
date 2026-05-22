@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { useAppContext } from "./contexts/AppContext";
+import { Toaster } from "@/components/ui/sonner";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
@@ -28,6 +29,7 @@ function App() {
 
   return (
     <Router>
+      <Toaster />
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/login" element={<Login />} />
